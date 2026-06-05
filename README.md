@@ -1,180 +1,61 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LamaSMP Store</title>
-  <meta name="description" content="Official LamaSMP Store — support the server and unlock awesome perks." />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="icon" href="logo.png" />
-</head>
-<body>
-  <!-- decorative background -->
-  <div class="bg-grid" aria-hidden="true"></div>
-  <div class="bg-blob bg-blob--1" aria-hidden="true"></div>
-  <div class="bg-blob bg-blob--2" aria-hidden="true"></div>
+# LamaSMP Store 🦙💚
 
-  <!-- ===== Header ===== -->
-  <header class="header" id="header">
-    <div class="container header__inner">
-      <a class="brand" href="#top">
-        <img class="brand__mark" src="logo.png" alt="LamaSMP" width="36" height="36" />
-        <span class="brand__text">
-          <span class="brand__name" id="brandName">LamaSMP</span>
-          <span class="brand__sub">Store</span>
-        </span>
-      </a>
+A clean, green-themed custom storefront for the **LamaSMP** Minecraft server, powered by the
+[Tebex Headless API](https://docs.tebex.io/developers/headless-api/overview). It renders your
+packages live and **listens for changes** — add, remove, re-price or edit a package in your Tebex
+panel and the store updates itself, no redeploy or refresh needed.
 
-      <nav class="nav" aria-label="Primary">
-        <a href="#store">Store</a>
-        <a href="#about">About</a>
-        <a href="https://discord.gg/zHww5mrcPS" target="_blank" rel="noopener">Support</a>
-      </nav>
+## Files
+| File | What it does |
+|------|--------------|
+| `index.html` | Page structure (header, hero, store grid, about, cart drawer). |
+| `styles.css` | The green design system — dark theme, glassy header, card hover glow. |
+| `app.js` | Fetches packages from Tebex, renders cards, runs the **package listener**, handles the cart + checkout. |
 
-      <div class="header__actions">
-        <span class="live" id="liveBadge" title="Listening for package updates">
-          <span class="live__dot"></span> Live
-        </span>
-        <button class="cart-btn" id="cartBtn" aria-label="Open cart">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-          <span class="cart-btn__count" id="cartCount">0</span>
-        </button>
-      </div>
-    </div>
-  </header>
+## The package listener
+`app.js` polls the Tebex Headless API every **30 seconds** (and instantly when you re-focus the tab).
+It builds a fingerprint of every package (`id : price : last-updated`) and only re-renders when something
+actually changes, then shows a toast:
 
-  <main id="top">
-    <!-- ===== Store (categories) — top ===== -->
-    <section class="store" id="store">
-      <div class="container">
-        <div class="section-head">
-          <h2 class="section-title">Store</h2>
-          <p class="section-desc">Pick a category to browse — perks are delivered in-game automatically after checkout.</p>
-        </div>
+- **No packages yet** → a friendly empty state with a live *"Listening for new packages…"* badge.
+- **A package is added** → *"New packages are now available! 🎉"*
+- **A package is edited / re-priced** → *"Store updated 🔄"*
 
-        <!-- who you're buying for -->
-        <div class="shopping-as" id="shoppingAs"></div>
+Change the cadence via `CONFIG.pollInterval` in `app.js`.
 
-        <!-- category overview (the colourful banners) -->
-        <div class="cat-grid" id="catGrid" aria-live="polite">
-          <div class="cat-card skeleton" style="min-height:150px;background:var(--surface)"></div>
-          <div class="cat-card skeleton" style="min-height:150px;background:var(--surface)"></div>
-        </div>
+## Configuration
+Open `app.js` and edit the `CONFIG` block at the top:
 
-        <!-- drill-in: a single category's packages -->
-        <div class="cat-view" id="catView" hidden>
-          <button class="back-btn" id="backBtn">← All categories</button>
-          <h3 class="cat-view__title" id="catTitle"></h3>
-          <div class="grid" id="grid" aria-live="polite"></div>
-        </div>
-      </div>
-    </section>
+```js
+const CONFIG = {
+  token: "139nj-334d4c618fe5ebd3b0444bb60a475fcc2cb12e21", // your Tebex public token
+  storeName: "LamaSMP",           // display name (overrides Tebex)
+  pollInterval: 30000,            // listener check interval (ms)
+  serverIp: "play.lamasmp.net",   // ← change to your real server IP
+  hostedStore: "https://lamasmp.tebex.io",
+};
+```
 
-    <!-- ===== Hero (welcome) — middle ===== -->
-    <section class="hero">
-      <div class="container hero__inner">
-        <h1 class="hero__title">
-          Support <span class="grad" id="heroName">LamaSMP</span><br />
-          and unlock the good stuff.
-        </h1>
-        <p class="hero__lead">
-          Every purchase keeps the server online, lag-free and growing.
-          Grab a rank, key or cosmetic and stand out on the SMP.
-        </p>
-        <div class="hero__cta">
-          <a href="#store" class="btn btn--primary">Browse packages</a>
-          <button class="btn btn--ghost" id="copyIp">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span id="serverIpText">lamasmp.net</span>
-          </button>
-        </div>
-        <div class="hero__stats">
-          <div class="stat"><span class="stat__num">100%</span><span class="stat__label">Goes to the server</span></div>
-          <div class="stat"><span class="stat__num">Instant</span><span class="stat__label">Delivery in-game</span></div>
-        </div>
-      </div>
-    </section>
+> **Note:** `serverIp` is a placeholder for the "Copy Server IP" button — set it to your real address.
+> Store name, currency, platform and the package list all come straight from Tebex automatically.
 
-    <!-- ===== About / where the money goes ===== -->
-    <section class="about" id="about">
-      <div class="container">
-        <div class="section-head">
-          <h2 class="section-title">Where does the money go?</h2>
-          <p class="section-desc">LamaSMP is a passion project. 100% of contributions go straight back into the server.</p>
-        </div>
-        <div class="value-grid">
-          <article class="value">
-            <div class="value__icon">🖥️</div>
-            <h3>Better hardware</h3>
-            <p>Upgrading the machine for a smooth, lag-free experience for everyone.</p>
-          </article>
-          <article class="value">
-            <div class="value__icon">📡</div>
-            <h3>Monthly hosting</h3>
-            <p>Paying the bills that keep the lights on and the server online 24/7.</p>
-          </article>
-          <article class="value">
-            <div class="value__icon">🧩</div>
-            <h3>Custom features</h3>
-            <p>Funding new plugins, events and custom content built just for the SMP.</p>
-          </article>
-        </div>
-      </div>
-    </section>
+## Checkout
+Clicking **Checkout** creates a Tebex basket, adds your cart items, and forwards you to Tebex's secure
+hosted checkout (account auth + payment). Payments, delivery and fraud protection are all handled by
+Tebex — no card details ever touch this site. If the headless checkout isn't reachable (e.g. the store
+is disabled in your panel), it falls back to opening your hosted Tebex store.
 
-    <!-- ===== Support / parents ===== -->
-    <section class="support" id="support">
-      <div class="container support__card">
-        <div class="support__icon">💚</div>
-        <div>
-          <h3>A note for parents</h3>
-          <p>You may be making a purchase for your child. We're committed to a safe, fun environment. If you have any payment concerns, reach out to our support team and we'll help right away.</p>
-        </div>
-      </div>
-    </section>
-  </main>
+## Run it locally
+It's a static site — any static server works:
 
-  <!-- ===== Footer ===== -->
-  <footer class="footer">
-    <div class="container footer__inner">
-      <div class="footer__brand">
-        <img class="brand__mark" src="logo.png" alt="" width="28" height="28" />
-        <strong id="footerName">LamaSMP</strong>
-      </div>
-      <p class="footer__fine">
-        All payments are final and non-refundable. We are not affiliated with Mojang AB or Microsoft.
-        Payments are securely processed by <a href="https://www.tebex.io" target="_blank" rel="noopener">Tebex</a>.
-      </p>
-      <p class="footer__copy">© <span id="year"></span> <span class="copy-name">LamaSMP</span>. All rights reserved.</p>
-    </div>
-  </footer>
+```bash
+python -m http.server 4173
+# then open http://localhost:4173
+```
 
-  <!-- ===== Cart drawer ===== -->
-  <div class="drawer-overlay" id="overlay" hidden></div>
-  <aside class="drawer" id="drawer" aria-hidden="true" aria-label="Shopping cart">
-    <div class="drawer__head">
-      <h3>Your cart</h3>
-      <button class="icon-btn" id="closeCart" aria-label="Close cart">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-      </button>
-    </div>
-    <div class="drawer__body" id="cartItems"></div>
-    <div class="drawer__foot">
-      <div class="drawer__total">
-        <span>Total</span>
-        <strong id="cartTotal">€0.00</strong>
-      </div>
-      <button class="btn btn--primary btn--block" id="checkoutBtn" disabled>Checkout</button>
-      <p class="drawer__secure">🔒 Secure checkout via Tebex</p>
-    </div>
-  </aside>
+## Deploy
+Upload `index.html`, `styles.css` and `app.js` to any static host (Netlify, Vercel, Cloudflare Pages,
+GitHub Pages). No build step, no backend.
 
-  <!-- ===== Toasts ===== -->
-  <div class="toasts" id="toasts" aria-live="assertive"></div>
-
-  <script src="app.js"></script>
-</body>
-</html>
+---
+*All payments are final and non-refundable. Not affiliated with Mojang AB or Microsoft. Payments processed by Tebex.*
