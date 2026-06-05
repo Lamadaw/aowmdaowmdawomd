@@ -244,14 +244,27 @@ img { max-width: 100%; display: block; }
   position: relative; isolation: isolate; overflow: hidden; cursor: pointer; text-align: left;
   border: 0; border-radius: 20px; padding: 30px 34px; min-height: 152px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  box-shadow: var(--shadow); transition: transform .22s var(--ease), box-shadow .22s;
+  box-shadow: var(--shadow); transition: transform .22s var(--ease), box-shadow .22s, filter .22s;
   animation: rise .5s var(--ease) both;
 }
 .cat-card::before {
   content: ""; position: absolute; inset: 0; z-index: -1;
   background: linear-gradient(120deg, rgba(0,0,0,.20), transparent 55%);
 }
-.cat-card:hover { transform: translateY(-5px); box-shadow: 0 26px 52px -22px rgba(0,0,0,.75); }
+/* light sweep that glides across the whole box on hover */
+.cat-card::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.28), transparent);
+  transform: skewX(-18deg); pointer-events: none;
+  transition: left .65s var(--ease);
+}
+.cat-card:hover::after { left: 130%; }
+.cat-card:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 32px 56px -22px rgba(0,0,0,.8);
+  filter: brightness(1.1) saturate(1.08);
+}
+.cat-card:active { transform: translateY(-1px) scale(.998); }
 .cat-card__name {
   font-family: "Outfit"; font-weight: 800; font-size: clamp(1.8rem, 4vw, 2.6rem); margin: 0;
   color: #fff; letter-spacing: -.02em; text-transform: uppercase; text-shadow: 0 2px 14px rgba(0,0,0,.28);
@@ -260,12 +273,15 @@ img { max-width: 100%; display: block; }
 .cat-card__img {
   width: 116px; height: 116px; object-fit: contain; image-rendering: pixelated; flex-shrink: 0;
   filter: drop-shadow(0 8px 14px rgba(0,0,0,.4));
+  transition: transform .35s var(--ease);
 }
+.cat-card:hover .cat-card__img { transform: scale(1.05); }
 /* Ranks: let the llama touch the bottom-right wall */
 .cat-card--ranks .cat-card__img {
   position: absolute; right: 0; bottom: 0; top: auto;
   width: 168px; height: 168px; padding: 0;
 }
+.cat-card--ranks:hover .cat-card__img { transform: scale(1.07); transform-origin: bottom right; }
 /* a lone last card stretches full width (like the GEMS banner) */
 .cat-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
