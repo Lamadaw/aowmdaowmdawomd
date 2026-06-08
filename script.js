@@ -186,7 +186,7 @@ function drawRankFeature(cat){
   const pkgs = cat.packages || [];
   const p = pkgs.find(x=>String(x.id)===String(activeRank[cat.id])) || pkgs[0];
   if(!p) return;
-  const price = p.total_price ?? p.base_price ?? 0;
+  const price = p.base_price ?? p.total_price ?? 0;
   const sub = p.type === "subscription";
   const {items, isList} = parseDescription(p.description);
   const desc = items.length
@@ -217,7 +217,7 @@ function drawRankFeature(cat){
 }
 
 function pkgCard(p){
-  const price = p.total_price ?? p.base_price ?? 0;
+  const price = p.base_price ?? p.total_price ?? 0;
   const sub = p.type === "subscription";
   const img = p.image ? `<img src="${p.image}" alt="${escapeHtml(p.name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="fallback" style="display:none">${escapeHtml(p.name)}</span>`
                       : `<span class="fallback">${escapeHtml(p.name)}</span>`;
@@ -238,7 +238,7 @@ function pkgCard(p){
 function addToCart(pid){
   const p = findPkg(pid);
   if(!p) return;
-  const price = p.total_price ?? p.base_price ?? 0;
+  const price = p.base_price ?? p.total_price ?? 0;
   // ask for username first if we don't have one yet
   if(!username){
     openUserModal(()=>doAddToCart(p, price));
