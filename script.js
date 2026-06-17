@@ -265,8 +265,8 @@ let umAfter = null;
 let userPlatform = "java"; // 'java' | 'bedrock'
 
 const PLAT_RULES = {
-  java:    { re:/^[A-Za-z0-9_]{3,16}$/,    ph:"e.g. Notch",        hint:"3–16 characters. Letters, numbers and underscores only." },
-  bedrock: { re:/^[A-Za-z0-9 _]{3,16}$/,   ph:"e.g. Your Gamertag", hint:"Your Bedrock gamertag — 3–16 characters, spaces allowed." }
+  java:    { re:/^[A-Za-z0-9_]{3,16}$/,    ph:"e.g. Notch",         hint:"3–16 characters. Letters, numbers and underscores only." },
+  bedrock: { re:/^[A-Za-z0-9 ._-]{2,24}$/, ph:"e.g. Your Gamertag",  hint:"Your Bedrock gamertag (spaces are allowed)." }
 };
 
 function setPlatform(plat){
@@ -298,6 +298,11 @@ function submitUserModal(){
   const val = ($("#umInput").value || "").trim();
   if(!PLAT_RULES[userPlatform].re.test(val)){
     $(".user-card").classList.add("invalid");
+    $("#umHint").textContent = !val
+      ? "Please enter your username first."
+      : (userPlatform === "bedrock"
+          ? "That doesn't look like a valid gamertag (2–24 characters)."
+          : "That username isn't valid — letters, numbers and underscores only.");
     $("#umInput").focus();
     return;
   }
@@ -489,7 +494,7 @@ $("#umClose").addEventListener("click", closeUserModal);
 $("#umPlatform").addEventListener("click",(e)=>{ const b=e.target.closest(".um-plat"); if(b) setPlatform(b.dataset.plat); });
 $("#userModal").addEventListener("click",(e)=>{ if(e.target.id==="userModal") closeUserModal(); });
 $("#umInput").addEventListener("keydown",(e)=>{ if(e.key==="Enter") submitUserModal(); });
-$("#umInput").addEventListener("input",()=>$(".user-card").classList.remove("invalid"));
+$("#umInput").addEventListener("input",()=>{ $(".user-card").classList.remove("invalid"); $("#umHint").textContent = PLAT_RULES[userPlatform].hint; });
 document.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){ closeCart(); closeAdded(); closeUserModal(); } });
 
 /* ---------- init ---------- */
