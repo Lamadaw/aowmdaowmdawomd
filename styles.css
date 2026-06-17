@@ -364,6 +364,16 @@
   .um-close:hover{background:rgba(255,255,255,.12);color:var(--text)}
   .user-card h3{font-family:var(--font-display);font-size:30px;font-weight:800;letter-spacing:-.02em;margin-bottom:12px;padding-right:30px}
   .user-card p{color:var(--muted);font-size:16px;line-height:1.55;margin-bottom:24px}
+  .um-platform{display:flex;justify-content:center;gap:12px;margin-bottom:22px}
+  .um-plat{
+    display:inline-flex;align-items:center;gap:9px;
+    background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:13px;
+    padding:13px 22px;color:var(--muted);font-family:var(--font-display);font-weight:800;font-size:15px;
+    letter-spacing:.03em;cursor:pointer;transition:.2s
+  }
+  .um-plat svg{width:19px;height:19px}
+  .um-plat:hover{color:var(--text);border-color:var(--border-strong)}
+  .um-plat.active{background:var(--green);color:#03140a;border-color:var(--green-bright);box-shadow:0 8px 24px -8px rgba(34,197,94,.55)}
   .user-card #umInput{
     width:100%;background:rgba(0,0,0,.45);border:1.5px solid var(--border);border-radius:14px;
     padding:17px 18px;color:var(--text);font-size:17px;font-family:var(--font-body);outline:none;transition:.2s

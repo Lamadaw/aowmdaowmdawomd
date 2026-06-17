@@ -4,6 +4,12 @@
    ============================================================ */
 const TEBEX_KEY = "139nj-334d4c618fe5ebd3b0444bb60a475fcc2cb12e21";
 const API = `https://headless.tebex.io/api/accounts/${TEBEX_KEY}`;
+
+// Floodgate prefix added to BEDROCK usernames before sending to Tebex.
+// Must match your server's Floodgate config (username-prefix). Default is ".".
+// Use "." or "!" — Tebex rejects "+" and "-". Set to "" if your server has no prefix.
+const BEDROCK_PREFIX = ".";
+
 const CARD_THEMES = ["green","blue","purple","teal","amber"];
 const CARD_ART = {ranks:"🦙",tools:"⛏️",crates:"🗝️",gems:"💎",keys:"🗝️",coins:"🪙",tags:"🏷️",cosmetics:"✨",kits:"🎁",default:"🟩"};
 
@@ -256,22 +262,48 @@ function doAddToCart(p, price){
 
 /* ---------- username prompt modal ---------- */
 let umAfter = null;
+let userPlatform = "java"; // 'java' | 'bedrock'
+
+const PLAT_RULES = {
+  java:    { re:/^[A-Za-z0-9_]{3,16}$/,    ph:"e.g. Notch",        hint:"3–16 characters. Letters, numbers and underscores only." },
+  bedrock: { re:/^[A-Za-z0-9 _]{3,16}$/,   ph:"e.g. Your Gamertag", hint:"Your Bedrock gamertag — 3–16 characters, spaces allowed." }
+};
+
+function setPlatform(plat){
+  userPlatform = (plat === "bedrock") ? "bedrock" : "java";
+  document.querySelectorAll(".um-plat").forEach(b=>{
+    b.classList.toggle("active", b.dataset.plat === userPlatform);
+  });
+  const rule = PLAT_RULES[userPlatform];
+  const inp = $("#umInput");
+  inp.placeholder = rule.ph;
+  $("#umHint").textContent = rule.hint;
+  $(".user-card").classList.remove("invalid");
+}
+
 function openUserModal(after){
   umAfter = after || null;
   $("#userModal").classList.add("open");
   $(".user-card").classList.remove("invalid");
-  $("#umInput").value = username || "";
+  setPlatform(userPlatform);
+  let shown = username || "";
+  if(userPlatform === "bedrock" && BEDROCK_PREFIX && shown.startsWith(BEDROCK_PREFIX)){
+    shown = shown.slice(BEDROCK_PREFIX.length);
+  }
+  $("#umInput").value = shown;
   setTimeout(()=>$("#umInput").focus(), 60);
 }
 function closeUserModal(){ $("#userModal").classList.remove("open"); umAfter = null; }
 function submitUserModal(){
   const val = ($("#umInput").value || "").trim();
-  if(!/^[A-Za-z0-9_]{3,16}$/.test(val)){
+  if(!PLAT_RULES[userPlatform].re.test(val)){
     $(".user-card").classList.add("invalid");
     $("#umInput").focus();
     return;
   }
-  setUsernameValue(val);
+  // Bedrock names need the Floodgate prefix so Tebex delivers to the right account
+  const finalName = (userPlatform === "bedrock" && BEDROCK_PREFIX) ? (BEDROCK_PREFIX + val) : val;
+  setUsernameValue(finalName);
   const after = umAfter;
   closeUserModal();
   if(typeof after === "function") after();
@@ -343,6 +375,34 @@ function syncUsername(){
 }
 
 /* ---------- checkout (Tebex Headless basket) ---------- */
+/* fetch helper that surfaces the real Tebex error message */
+async function tebexApi(url, opts={}){
+  const headers = { Accept:"application/json", ...(opts.headers||{}) };
+  if(opts.body) headers["Content-Type"] = "application/json";
+  let res;
+  try{
+    res = await fetch(url, { ...opts, headers });
+  }catch(netErr){
+    throw new Error("Network/blocked request (" + (netErr.message||"failed to fetch") + ")");
+  }
+  let body = null;
+  try{ body = await res.clone().json(); }catch(e){}
+  if(!res.ok){
+    const msg = (body && (body.detail || body.title || body.error_message || body.message)) || ("HTTP " + res.status);
+    throw new Error(msg + " [" + res.status + "]");
+  }
+  return body;
+}
+
+function checkoutFailed(err){
+  const msg = (err && err.message) ? err.message : "Unknown error";
+  console.error("Checkout failed:", err);
+  toast("Checkout error — see note below");
+  $("#checkoutNote").textContent =
+    "Checkout error: " + msg +
+    ". If it mentions an invalid username or verification, set your Tebex store to offline/Geyser (turn off username verification).";
+}
+
 async function checkout(){
   const btn = $("#checkoutBtn");
   if(!cart.length) return;
@@ -351,12 +411,11 @@ async function checkout(){
     openUserModal(()=>checkout());
     return;
   }
-  btn.disabled = true; btn.textContent = "Creating basket…";
+  btn.disabled = true; btn.textContent = "Starting checkout…";
   try{
-    // 1) create basket
-    const bRes = await fetch(`${API}/baskets`, {
+    // 1) create the basket (providing username identifies the player)
+    const basket = await tebexApi(`${API}/baskets`, {
       method:"POST",
-      headers:{"Content-Type":"application/json", Accept:"application/json"},
       body: JSON.stringify({
         username: username,
         complete_url: location.href,
@@ -364,59 +423,33 @@ async function checkout(){
         complete_auto_redirect: true
       })
     });
-    if(!bRes.ok) throw new Error("basket "+bRes.status);
-    const basket = (await bRes.json()).data;
-    const ident = basket.ident;
+    const ident = basket?.data?.ident;
+    if(!ident) throw new Error("No basket id returned");
 
-    // 2) Minecraft baskets must be authenticated to the username before adding packages
-    const authRes = await fetch(`${API}/baskets/${ident}/auth?returnUrl=${encodeURIComponent(location.href)}`, {headers:{Accept:"application/json"}});
-    if(authRes.ok){
-      const auths = await authRes.json();
-      if(Array.isArray(auths) && auths.length && auths[0].url){
-        // stash the cart + basket so we can resume after auth redirect
-        sessionStorage.setItem("ls_pending", JSON.stringify({ident, cart}));
-        location.href = auths[0].url;
-        return;
-      }
+    // 2) add every cart item to the basket FIRST (so checkout isn't empty)
+    for(const item of cart){
+      await tebexApi(`https://headless.tebex.io/api/baskets/${ident}/packages`, {
+        method:"POST",
+        body: JSON.stringify({ package_id: item.id, quantity: item.qty })
+      });
     }
-    // 3) no auth needed -> add packages now and go to checkout
-    await addAllAndCheckout(ident);
+
+    // 3) fetch the basket to get its checkout link
+    const full = await tebexApi(`${API}/baskets/${ident}`);
+    const checkoutUrl = full?.data?.links?.checkout || full?.data?.links?.payment;
+    if(!checkoutUrl) throw new Error("No checkout link returned by Tebex");
+
+    // 4) if the store requires login, go through auth (returning to the filled checkout)
+    let auths = [];
+    try{
+      auths = await tebexApi(`${API}/baskets/${ident}/auth?returnUrl=${encodeURIComponent(checkoutUrl)}`);
+    }catch(e){ /* offline/Geyser stores may not return auth links */ }
+
+    location.href = (Array.isArray(auths) && auths.length && auths[0].url) ? auths[0].url : checkoutUrl;
   }catch(err){
-    console.error(err);
-    toast("Checkout couldn't start — see note below");
-    $("#checkoutNote").textContent = "Couldn't reach Tebex checkout from here. This works once the site is hosted on your live domain (Tebex restricts cross-origin requests).";
+    checkoutFailed(err);
     btn.disabled = false; btn.textContent = "Checkout";
   }
-}
-
-async function addAllAndCheckout(ident){
-  for(const item of cart){
-    await fetch(`https://headless.tebex.io/api/baskets/${ident}/packages`, {
-      method:"POST",
-      headers:{"Content-Type":"application/json", Accept:"application/json"},
-      body: JSON.stringify({package_id:item.id, quantity:item.qty})
-    });
-  }
-  // fetch basket to get checkout link
-  const r = await fetch(`${API}/baskets/${ident}`, {headers:{Accept:"application/json"}});
-  const data = (await r.json()).data;
-  const url = data?.links?.checkout || data?.links?.payment;
-  if(url){ location.href = url; }
-  else { throw new Error("no checkout link"); }
-}
-
-/* resume after auth redirect */
-async function resumePending(){
-  const raw = sessionStorage.getItem("ls_pending");
-  if(!raw) return false;
-  sessionStorage.removeItem("ls_pending");
-  try{
-    const {ident, cart:savedCart} = JSON.parse(raw);
-    cart = savedCart || [];
-    renderCart();
-    await addAllAndCheckout(ident);
-    return true;
-  }catch(e){ console.warn(e); return false; }
 }
 
 /* ---------- events ---------- */
@@ -453,6 +486,7 @@ $("#ipPill").addEventListener("click", async ()=>{
 $("#addedModal").addEventListener("click",(e)=>{ if(e.target.id==="addedModal") closeAdded(); });
 $("#umContinue").addEventListener("click", submitUserModal);
 $("#umClose").addEventListener("click", closeUserModal);
+$("#umPlatform").addEventListener("click",(e)=>{ const b=e.target.closest(".um-plat"); if(b) setPlatform(b.dataset.plat); });
 $("#userModal").addEventListener("click",(e)=>{ if(e.target.id==="userModal") closeUserModal(); });
 $("#umInput").addEventListener("keydown",(e)=>{ if(e.key==="Enter") submitUserModal(); });
 $("#umInput").addEventListener("input",()=>$(".user-card").classList.remove("invalid"));
@@ -461,5 +495,4 @@ document.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){ closeCart(); cl
 /* ---------- init ---------- */
 (async ()=>{
   await loadStore();
-  await resumePending();
 })();
