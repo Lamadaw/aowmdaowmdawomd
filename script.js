@@ -10,6 +10,9 @@ const API = `https://headless.tebex.io/api/accounts/${TEBEX_KEY}`;
 // Use "." or "!" — Tebex rejects "+" and "-". Set to "" if your server has no prefix.
 const BEDROCK_PREFIX = ".";
 
+// Category names (lowercase) to hide from the store entirely.
+const HIDE_CATEGORIES = ["tools"];
+
 const CARD_THEMES = ["green","blue","purple","teal","amber"];
 const CARD_ART = {ranks:"🦙",tools:"⛏️",crates:"🗝️",gems:"💎",keys:"🗝️",coins:"🪙",tags:"🏷️",cosmetics:"✨",kits:"🎁",default:"🟩"};
 
@@ -57,6 +60,7 @@ async function loadStore(){
     const data = json.data || [];
     categories = data
       .filter(c => (c.packages||[]).length || c.only_subcategories === false)
+      .filter(c => !HIDE_CATEGORIES.includes((c.name||"").toLowerCase().trim()))
       .sort((a,b)=>(a.order||0)-(b.order||0));
     // detect currency from first package
     for(const c of categories){
@@ -80,9 +84,10 @@ function loadDemo(){
       {id:102,name:"Lama++",type:"subscription",total_price:12.99,base_price:12.99,currency:"USD",description:"<ul><li>Everything in Lama+</li><li>4x Player Vaults</li><li>10 Home slots</li><li>Particle trails</li><li>Monthly crate keys</li></ul>"},
       {id:103,name:"Lama MVP",type:"single",total_price:19.99,base_price:19.99,currency:"USD",description:"<ul><li>Everything in Lama++</li><li>Custom join message</li><li>Nickname command</li><li>Priority support</li></ul>"}
     ]},
-    {id:"d2", name:"Tools", packages:[
-      {id:201,name:"Netherite Pickaxe Kit",type:"single",total_price:4.99,base_price:4.99,currency:"USD",description:"<ul><li>Efficiency V</li><li>Fortune III</li><li>Unbreaking III</li><li>Mending</li></ul>"},
-      {id:202,name:"God Tool Bundle",type:"single",total_price:9.99,base_price:9.99,currency:"USD",description:"<ul><li>Maxed pickaxe, axe & shovel</li><li>Sharpness V sword</li><li>Full enchanted set</li></ul>"}
+    {id:"d2", name:"Crates", packages:[
+      {id:201,name:"Common Key",type:"single",total_price:0.99,base_price:0.99,currency:"USD",description:"Opens a Common crate for a chance at handy rewards."},
+      {id:202,name:"Rare Key",type:"single",total_price:2.49,base_price:2.49,currency:"USD",description:"Opens a Rare crate with better loot odds."},
+      {id:203,name:"Legendary Key",type:"single",total_price:4.99,base_price:4.99,currency:"USD",description:"Opens a Legendary crate for the best rewards."}
     ]}
   ];
   renderCategories();
@@ -110,6 +115,9 @@ function renderCategories(){
 /* ---------- render packages of a category ---------- */
 function isRankCategory(cat){
   return /rank/i.test(cat.name || "");
+}
+function isCrateCategory(cat){
+  return /crate|key/i.test(cat.name || "");
 }
 function parseDescription(html){
   if(!html) return {items:[], isList:false};
@@ -155,10 +163,13 @@ function renderSections(){
     const pkgs = cat.packages || [];
     const sub = isRankCategory(cat)
       ? "Pick a rank to unlock exclusive perks and support the server."
-      : "Choose what you'd like and add it to your cart.";
+      : isCrateCategory(cat)
+        ? "Unlock rewards with keys. Choose a quantity and add to cart."
+        : "Choose what you'd like and add it to your cart.";
     let body;
     if(!pkgs.length) body = `<div class="state">No packages in this category yet.</div>`;
     else if(isRankCategory(cat)) body = `<div class="rank-block" data-cat="${cat.id}"></div>`;
+    else if(isCrateCategory(cat)) body = `<div class="pkg-grid">${pkgs.map(p=>crateCard(p)).join("")}</div>`;
     else body = `<div class="pkg-grid">${pkgs.map(p=>pkgCard(p)).join("")}</div>`;
     return `<section class="cat-section" id="cat-${cat.id}">
       <div class="section-head"><h2>${escapeHtml(cat.name)}</h2><p>${escapeHtml(sub)}</p></div>
@@ -240,22 +251,42 @@ function pkgCard(p){
   </div>`;
 }
 
+/* crate / key card with quantity selector */
+function crateCard(p){
+  const price = p.base_price ?? p.total_price ?? 0;
+  const img = p.image
+    ? `<img src="${p.image}" alt="${escapeHtml(p.name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="fallback" style="display:none">🗝️</span>`
+    : `<span class="fallback">🗝️</span>`;
+  const qtys = [1,5,10,20];
+  return `<div class="crate" data-id="${p.id}">
+    <div class="crate-media">${img}</div>
+    <h3>${escapeHtml(p.name)}</h3>
+    <div class="crate-price">${money(price)}</div>
+    <div class="crate-qtys">
+      ${qtys.map((q,i)=>`<button class="crate-qty ${i===0?'active':''}" data-qty="${q}">${q}x</button>`).join("")}
+    </div>
+    <button class="crate-add" data-id="${p.id}">ADD TO CART</button>
+  </div>`;
+}
+
 /* ---------- cart ---------- */
-function addToCart(pid){
+function addToCart(pid, qty){
   const p = findPkg(pid);
   if(!p) return;
   const price = p.base_price ?? p.total_price ?? 0;
+  const q = Math.max(1, parseInt(qty) || 1);
   // ask for username first if we don't have one yet
   if(!username){
-    openUserModal(()=>doAddToCart(p, price));
+    openUserModal(()=>doAddToCart(p, price, q));
     return;
   }
-  doAddToCart(p, price);
+  doAddToCart(p, price, q);
 }
-function doAddToCart(p, price){
+function doAddToCart(p, price, qty){
+  const q = Math.max(1, parseInt(qty) || 1);
   const ex = cart.find(c=>c.id===p.id);
-  if(ex) ex.qty++;
-  else cart.push({id:p.id, name:p.name, price, image:p.image, qty:1});
+  if(ex) ex.qty += q;
+  else cart.push({id:p.id, name:p.name, price, image:p.image, qty:q});
   renderCart();
   showAddedPopup(p, price);
 }
@@ -469,6 +500,22 @@ $("#pkgArea").addEventListener("click",(e)=>{
     activeRank[cid] = tab.dataset.id;
     const cat = categories.find(c=>String(c.id)===String(cid));
     if(cat) renderRankBlock(cat);
+    return;
+  }
+  // crate quantity selector
+  const qbtn = e.target.closest(".crate-qty");
+  if(qbtn){
+    const card = qbtn.closest(".crate");
+    card.querySelectorAll(".crate-qty").forEach(b=>b.classList.toggle("active", b===qbtn));
+    return;
+  }
+  // crate add-to-cart (uses selected quantity)
+  const cadd = e.target.closest(".crate-add");
+  if(cadd){
+    const card = cadd.closest(".crate");
+    const active = card.querySelector(".crate-qty.active");
+    const qty = active ? parseInt(active.dataset.qty) : 1;
+    addToCart(cadd.dataset.id, qty);
     return;
   }
   const add = e.target.closest(".add, .rf-add");
