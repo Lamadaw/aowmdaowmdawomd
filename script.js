@@ -288,7 +288,7 @@ function doAddToCart(p, price, qty){
   if(ex) ex.qty += q;
   else cart.push({id:p.id, name:p.name, price, image:p.image, qty:q});
   renderCart();
-  showAddedPopup(p, price);
+  toast(`${p.name} added to cart`);
 }
 
 /* ---------- username prompt modal ---------- */
@@ -310,6 +310,7 @@ function setPlatform(plat){
   inp.placeholder = rule.ph;
   $("#umHint").textContent = rule.hint;
   $(".user-card").classList.remove("invalid");
+  updateFacePreview();
 }
 
 function openUserModal(after){
@@ -322,6 +323,7 @@ function openUserModal(after){
     shown = shown.slice(BEDROCK_PREFIX.length);
   }
   $("#umInput").value = shown;
+  updateFacePreview();
   setTimeout(()=>$("#umInput").focus(), 60);
 }
 function closeUserModal(){ $("#userModal").classList.remove("open"); umAfter = null; }
@@ -350,31 +352,25 @@ function setUsernameValue(name){
   renderCart();
 }
 
-/* "Added to cart" confirmation popup */
-function showAddedPopup(p, price){
-  const sub = p.type === "subscription";
-  const img = p.image
-    ? `<img src="${p.image}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${escapeHtml(p.name).slice(0,2)}'}))">`
-    : `<span>${escapeHtml(p.name).slice(0,2)}</span>`;
-  $("#addedBody").innerHTML = `
-    <div class="added-tick">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-    </div>
-    <h3>Added to cart!</h3>
-    <div class="added-item">
-      <div class="added-img">${img}</div>
-      <div class="added-info"><div class="n">${escapeHtml(p.name)}</div><div class="p">${money(price)}${sub?' / month':''}</div></div>
-    </div>
-    <div class="added-actions">
-      <button class="ab-btn ghost" id="keepShopping">Keep shopping</button>
-      <button class="ab-btn primary" id="goCart">View cart</button>
-    </div>`;
-  $("#addedModal").classList.add("open");
-  $("#keepShopping").addEventListener("click", closeAdded);
-  $("#goCart").addEventListener("click", ()=>{ closeAdded(); openCart(); });
+/* live face preview in the username modal */
+let faceTimer = null;
+function updateFacePreview(){
+  const box = $("#umFace"), img = $("#umFaceImg");
+  const val = ($("#umInput").value || "").trim();
+  const valid = userPlatform === "java"
+    ? /^[A-Za-z0-9_]{3,16}$/.test(val)
+    : /^[A-Za-z0-9 ._-]{2,24}$/.test(val);
+  if(valid){
+    loadFace(img, val);
+    $("#umFaceName").textContent = val;
+    box.classList.add("show");
+  }else{
+    box.classList.remove("show");
+  }
 }
-function closeAdded(){ $("#addedModal").classList.remove("open"); }
+function scheduleFacePreview(){ clearTimeout(faceTimer); faceTimer = setTimeout(updateFacePreview, 350); }
 
+/* ---------- cart drawer ---------- */
 function removeFromCart(pid){ cart = cart.filter(c=>String(c.id)!==String(pid)); renderCart(); }
 
 function renderCart(){
@@ -439,12 +435,72 @@ function checkoutFailed(err){
     ". If it mentions an invalid username or verification, set your Tebex store to offline/Geyser (turn off username verification).";
 }
 
-async function checkout(){
+/* show a Tebex-style checkout menu before sending to Tebex */
+function openConfirm(){
+  if(!cart.length) return;
+  renderConfirm();
+  closeCart();
+  $("#confirmModal").classList.add("open");
+}
+/* load a Minecraft face by username, trying several services */
+function loadFace(imgEl, name){
+  const clean = (name || "").replace(/^[.!]/,"").trim();
+  if(!clean){ imgEl.style.visibility = "hidden"; return; }
+  const enc = encodeURIComponent(clean);
+  const sources = [
+    `https://minotar.net/helm/${enc}/96.png`,
+    `https://crafthead.net/helm/${enc}`,
+    `https://mc-heads.net/avatar/${enc}/96`
+  ];
+  let i = 0;
+  imgEl.style.visibility = "";
+  imgEl.onerror = ()=>{ i++; if(i < sources.length){ imgEl.src = sources[i]; } else { imgEl.style.visibility = "hidden"; } };
+  imgEl.src = sources[0];
+}
+
+function renderConfirm(){
+  // signed-in user
+  $("#confirmName").textContent = username || "Not set yet";
+  const av = $("#confirmAv");
+  if(username){
+    av.style.display = "";
+    loadFace(av, username);
+  }else{
+    av.style.display = "none";
+  }
+  $("#confirmCurrency").textContent = currency || "USD";
+
+  // line items with quantity steppers
+  $("#confirmItems").innerHTML = cart.map(c=>{
+    const init = escapeHtml(c.name).slice(0,2);
+    const img = c.image
+      ? `<img src="${c.image}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${init}'}))">`
+      : `<span>${init}</span>`;
+    return `<div class="co-row">
+      <div class="co-name"><div class="ci-img">${img}</div><span>${escapeHtml(c.name)}</span></div>
+      <div class="co-price">${money(c.price*c.qty)}</div>
+      <div class="co-qty">
+        <div class="co-stepper">
+          <button class="co-step" data-act="dec" data-id="${c.id}" aria-label="Decrease">−</button>
+          <span class="co-qn">${c.qty}</span>
+          <button class="co-step" data-act="inc" data-id="${c.id}" aria-label="Increase">+</button>
+        </div>
+        <button class="co-remove" data-id="${c.id}" aria-label="Remove">×</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  const total = cart.reduce((s,c)=>s+c.price*c.qty,0);
+  $("#confirmTotal").textContent = money(total);
+}
+function closeConfirm(){ $("#confirmModal").classList.remove("open"); }
+
+async function proceedCheckout(){
   const btn = $("#checkoutBtn");
   if(!cart.length) return;
   if(!username){
     closeCart();
-    openUserModal(()=>checkout());
+    openUserModal(()=>proceedCheckout());
     return;
   }
   btn.disabled = true; btn.textContent = "Starting checkout…";
@@ -492,7 +548,29 @@ async function checkout(){
 $("#cartBtn").addEventListener("click", openCart);
 $("#closeCart").addEventListener("click", closeCart);
 $("#overlay").addEventListener("click", closeCart);
-$("#checkoutBtn").addEventListener("click", checkout);
+$("#checkoutBtn").addEventListener("click", openConfirm);
+$("#confirmGo").addEventListener("click", ()=>{ closeConfirm(); proceedCheckout(); });
+$("#confirmClose").addEventListener("click", closeConfirm);
+$("#confirmSwitch").addEventListener("click", ()=>{ closeConfirm(); openUserModal(()=>openConfirm()); });
+$("#confirmModal").addEventListener("click",(e)=>{
+  if(e.target.id==="confirmModal"){ closeConfirm(); return; }
+  const step = e.target.closest(".co-step");
+  if(step){
+    const c = cart.find(x=>String(x.id)===String(step.dataset.id));
+    if(c){
+      c.qty = step.dataset.act==="inc" ? c.qty+1 : Math.max(1, c.qty-1);
+      renderCart();
+      renderConfirm();
+    }
+    return;
+  }
+  const rm = e.target.closest(".co-remove");
+  if(rm){
+    removeFromCart(rm.dataset.id);
+    if(!cart.length) closeConfirm();
+    else renderConfirm();
+  }
+});
 $("#pkgArea").addEventListener("click",(e)=>{
   const tab = e.target.closest(".rank-tab");
   if(tab){
@@ -535,14 +613,13 @@ $("#ipPill").addEventListener("click", async ()=>{
   toast("Server IP copied!");
   setTimeout(()=>{ pill.classList.remove("copied"); span.textContent = orig; }, 1400);
 });
-$("#addedModal").addEventListener("click",(e)=>{ if(e.target.id==="addedModal") closeAdded(); });
 $("#umContinue").addEventListener("click", submitUserModal);
 $("#umClose").addEventListener("click", closeUserModal);
 $("#umPlatform").addEventListener("click",(e)=>{ const b=e.target.closest(".um-plat"); if(b) setPlatform(b.dataset.plat); });
 $("#userModal").addEventListener("click",(e)=>{ if(e.target.id==="userModal") closeUserModal(); });
 $("#umInput").addEventListener("keydown",(e)=>{ if(e.key==="Enter") submitUserModal(); });
-$("#umInput").addEventListener("input",()=>{ $(".user-card").classList.remove("invalid"); $("#umHint").textContent = PLAT_RULES[userPlatform].hint; });
-document.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){ closeCart(); closeAdded(); closeUserModal(); } });
+$("#umInput").addEventListener("input",()=>{ $(".user-card").classList.remove("invalid"); $("#umHint").textContent = PLAT_RULES[userPlatform].hint; scheduleFacePreview(); });
+document.addEventListener("keydown",(e)=>{ if(e.key==="Escape"){ closeCart(); closeUserModal(); closeConfirm(); } });
 
 /* ---------- init ---------- */
 (async ()=>{

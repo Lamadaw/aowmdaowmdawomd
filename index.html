@@ -30,7 +30,7 @@
     </div>
     <div class="nav-links">
       <a href="#" class="active">Store</a>
-      <a href="https://discord.com/invite/NAatkHTRrC" target="_blank" rel="noopener">Support</a>
+      <a href="https://discord.com/invite/HSedGZ8QwM" target="_blank" rel="noopener">Support</a>
     </div>
     <div class="nav-right">
       <div class="live"><span class="dot"></span>Live</div>
@@ -51,7 +51,7 @@
 </main>
 
 <footer>
-  <div class="wrap">© <span id="yr"></span> LamaSMP · Payments handled securely by Tebex · <a href="https://discord.com/invite/NAatkHTRrC" target="_blank" rel="noopener">Support</a></div>
+  <div class="wrap">© <span id="yr"></span> LamaSMP · Payments handled securely by Tebex · <a href="https://discord.com/invite/HSedGZ8QwM" target="_blank" rel="noopener">Support</a></div>
 </footer>
 
 <!-- cart -->
@@ -72,9 +72,32 @@
 
 <div class="toast" id="toast"><span class="ic">✓</span><span id="toastMsg"></span></div>
 
-<!-- added to cart popup -->
-<div class="added-modal" id="addedModal" aria-hidden="true">
-  <div class="added-card" id="addedBody"></div>
+<!-- order confirmation (checkout-style) menu -->
+<div class="confirm-modal" id="confirmModal" aria-hidden="true">
+  <div class="checkout-card">
+    <button class="confirm-close" id="confirmClose" aria-label="Close">×</button>
+    <div class="co-head">
+      <div class="co-title">
+        <img class="co-logo" src="logo.png" alt="">
+        <div>
+          <h3>Checkout</h3>
+          <div class="co-total">Total: <b id="confirmTotal">$0.00</b></div>
+        </div>
+      </div>
+      <div class="co-currency" id="confirmCurrency">USD</div>
+    </div>
+    <div class="co-divider"></div>
+    <div class="co-user">
+      <img class="co-av" id="confirmAv" alt="">
+      <div class="co-user-info"><span>You are currently signed in as</span><b id="confirmName">—</b></div>
+      <div class="co-switch"><span>Wrong account?</span><button id="confirmSwitch">Switch Accounts</button></div>
+    </div>
+    <div class="co-divider"></div>
+    <div class="co-table-head"><span>Name</span><span>Price</span><span>Quantity</span></div>
+    <div class="co-items" id="confirmItems"></div>
+    <button class="co-proceed" id="confirmGo">Proceed to checkout &raquo;</button>
+    <div class="confirm-note">You'll be redirected to Tebex to complete payment securely.</div>
+  </div>
 </div>
 
 <!-- username prompt modal -->
@@ -94,6 +117,7 @@
       </button>
     </div>
     <input type="text" id="umInput" placeholder="e.g. Notch" autocomplete="off" spellcheck="false" maxlength="24">
+    <div class="um-face" id="umFace"><img id="umFaceImg" alt="Your skin"><span id="umFaceName"></span></div>
     <div class="um-hint" id="umHint">3–16 characters. Letters, numbers and underscores only.</div>
     <button class="um-continue" id="umContinue">CONTINUE</button>
   </div>
